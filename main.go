@@ -2,48 +2,42 @@ package main
 
 import (
 	"fmt"
-	"strings"
-	"sync"
-
-	"github.com/gocolly/colly"
+	"io"
+	"net/http"
+	"os"
 )
 
-func main() {
-	// Erstelle einen neuen Collector
-	c := colly.NewCollector()
+func downloadHTML(url, filename string) error {
+	// HTTP-Request, um die HTML-Seite herunterzuladen
+	response, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
 
-	// Warte-Gruppe für parallele Ausführung
-	var wg sync.WaitGroup
+	// Datei erstellen, um die heruntergeladene HTML zu speichern
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
 
-	// Schlagwort, nach dem gesucht wird
-	keyword := "Niko"
-
-	// Definiere die Aktion, die beim Besuch jeder Seite ausgeführt wird
-	c.OnHTML("a[href]", func(e *colly.HTMLElement) {
-		link := e.Attr("href")
-		if strings.Contains(link, keyword) {
-			fmt.Println(link)
-		}
-	})
-
-	// Starte den Webscraper für mehrere Seiten parallel
-	for i := 1; i <= 5; i++ {
-		// Inkrementiere die Warte-Gruppe
-		wg.Add(1)
-
-		// Goroutine für jeden Besuch
-		go func(pageNumber int) {
-			// Verzögere die Ausführung der Warte-Gruppe, wenn die Goroutine beendet ist
-			defer wg.Done()
-
-			// Besuche die Seite mit dem Suchbegriff
-			err := c.Visit(fmt.Sprintf("https://www.hltv.org/search?query=%s&page=%d", keyword, pageNumber))
-			if err != nil {
-				fmt.Printf("Fehler beim Besuch der Seite %d: %v\n", pageNumber, err)
-			}
-		}(i)
+	// Heruntergeladene HTML in die Datei schreiben
+	_, err = io.Copy(file, response.Body)
+	if err != nil {
+		return err
 	}
 
-	// Warte auf das Ende aller Goroutinen
-	wg.Wait()
+	fmt.Printf("HTML-Seite wurde erfolgreich unter '%s' gespeichert.\n", filename)
+	return nil
+}
+
+func main() {
+	url := "https://www.hltv.org/"
+	filename := "downloaded_page.html"
+
+	err := downloadHTML(url, filename)
+	if err != nil {
+		fmt.Println("Fehler beim Herunterladen der HTML-Seite:", err)
+	}
 }
